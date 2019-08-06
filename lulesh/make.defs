@@ -1,15 +1,16 @@
 
 DART_IMPL = mpi
 DART_VER  = v3.2
-DASH_ROOT = /home/fuerling/code/dash
+DASH_ROOT = /home/pascal/opt/dash-0.3.0-dev/
 
-LIBDASH   = $(DASH_ROOT)/dash/src/libdash.a
-LIBDART   = $(DASH_ROOT)/dart-impl/$(DART_IMPL)/src/libdart.a
+LIBDASH   = $(DASH_ROOT)/lib/libdash-mpi.a
+LIBDART_EXTRA   = $(DASH_ROOT)/lib/libdart-base.a
+LIBDART   = $(DASH_ROOT)/lib/libdart-mpi.a
 
-DASH_INC    = $(DASH_ROOT)/dash/include/
+DASH_INC    = $(DASH_ROOT)/include/
 DART_INC    = $(DASH_ROOT)/dart-impl/$(DART_IMPL)/include/
-DARTIF_INC  = $(DASH_ROOT)/dart-if/$(DART_VER)/include
+DARTIF_INC  = $(DASH_ROOT)/dart-if/include
 
-CXX       = mpicxx -std=c++11 -O3 #-pg 
-CFLAGS    = -DDASH_ENABLE_DEFAULT_INDEX_TYPE_LONG
+CXX       = mpicxx -std=c++14 -O3
+CFLAGS    = -DDASH_ENABLE_DEFAULT_INDEX_TYPE_LONG -pthread
 

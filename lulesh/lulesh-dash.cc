@@ -303,26 +303,41 @@ void Domain::TimeIncrement()
 }
 
 
+double duration(std::clock_t start) {
+  return ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+}
+
 void Domain::LagrangeLeapFrog()
 {
-  LagrangeNodal();
-  LagrangeElements();
+  std::clock_t start;
+  start = std::clock();
 
+  LagrangeNodal();
+  if(dash::myid() == 0)
+  std::cout << "LagrangeNodal:\t\t" << duration(start) << std::endl;
+  start = std::clock();
+  LagrangeElements();
+  if(dash::myid() == 0)
+  std::cout << "LagrangeElements:\t" << duration(start) << std::endl;
+
+  start = std::clock();
 #if SEDOV_SYNC_POS_VEL_LATE
   // initiate communication
   m_comm.Recv_PosVel();
   m_comm.Send_PosVel();
 #endif
-
   CalcTimeConstraintsForElems(*this);
 
 #if SEDOV_SYNC_POS_VEL_LATE
   // wait for completion
   m_comm.Sync_PosVel();
 #endif
+  if(dash::myid() == 0)
+  std::cout << "Done\t\t" << duration(start) << std::endl;
 }
 
 void Domain::LagrangeNodal()
+
 {
   const Real_t delt = deltatime();
   Real_t ucut = u_cut();
@@ -366,11 +381,12 @@ void Domain::LagrangeElements()
 
 void Domain::CalcAccelerationForNodes(Index_t numNode)
 {
+// TODO: dashify
 #pragma omp parallel for firstprivate(numNode)
   for (Index_t i = 0; i < numNode; ++i) {
-    xdd(i) = fx(i) / nodalMass(i);
-    ydd(i) = fy(i) / nodalMass(i);
-    zdd(i) = fz(i) / nodalMass(i);
+    m_xdd.lbegin()[i] = m_fx.lbegin()[i] / m_nodalMass.lbegin()[i];
+    m_ydd.lbegin()[i] = m_fy.lbegin()[i] / m_nodalMass.lbegin()[i];
+    m_zdd.lbegin()[i] = m_fz.lbegin()[i] / m_nodalMass.lbegin()[i];
   }
 }
 
@@ -1032,14 +1048,6 @@ void Domain::VerifyAndWriteFinalOutput(Real_t elapsed,
   Real_t grindTime2 = ((elapsed*1.0e6)/cycle())/(nx*nx*nx*numRanks);
 
   Index_t ElemId = 0;
-
-#if 0
-  cout << "Run completed:" << endl;
-  cout << "   Problem size        = " << nx << endl;
-  cout << "   MPI tasks           = " << numRanks << endl;
-  cout << "   Iteration count     = " << cycle() << endl;
-  cout << "   Final Origin Energy = " << e(ElemId) << endl;
-#endif
 
   printf("Run completed:  \n");
   printf("   Problem size        =  %i \n",    nx);

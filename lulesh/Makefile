@@ -2,7 +2,7 @@
 include make.defs
 
 #CFLAGS += -DUSE_MPI
-CFLAGS += -DUSE_DASH
+CFLAGS += -DUSE_DASH -pthread
 
 
 lulesh: lulesh.o lulesh-opts.o lulesh-dash.o lulesh-util.o	\
