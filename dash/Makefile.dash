@@ -12,7 +12,7 @@ SIMD ?= yes
 # System-specific settings
 DASH_ROOT ?= $(HOME)/opt/dash-0.3.0-dev/
 CC = $(DASH_ROOT)/bin/dash-mpiCC
-CCFLAGS =	-O3 -DMPICH_IGNORE_CXX_SEEK -fopenmp -DNOCHUNK
+CCFLAGS =	-O3 -DMPICH_IGNORE_CXX_SEEK -fopenmp -DNOCHUNK -I$(HOME)/src/mephisto/mephisto/include -I$(HOME)/src/mephisto/alpaka/include -I$(BOOST_ROOT)/include -DALPAKA_ACC_CPU_B_SEQ_T_SEQ_ENABLED
 LINK =		$(DASH_ROOT)/bin/dash-mpic++
 LINKFLAGS =	-O3 -fopenmp
 USRLIB = 	

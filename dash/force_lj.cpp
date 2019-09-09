@@ -34,6 +34,8 @@
 #include "force_lj.h"
 #include "openmp.h"
 
+#include "mephisto.h"
+
 #ifndef VECTORLENGTH
 #define VECTORLENGTH 4
 #endif
@@ -187,8 +189,12 @@ void ForceLJ::compute_halfneigh(Atom &atom, Neighbor &neighbor, int me)
   MMD_float t_energy = 0;
   MMD_float t_virial = 0;
 
+
+  MephistoConfig config;
+
   size_t i = 0;
   dash::for_each(
+      config.policy(),
       neighbor.numneigh_arr.begin(),
       neighbor.numneigh_arr.end(),
       [&, maxneighs = neighbor.maxneighs, neighbors = neighbor.neighbors](const int numneighs) {
