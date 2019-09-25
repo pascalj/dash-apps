@@ -1,13 +1,16 @@
 #include <libdash.h>
 
 #include <init.h>
+#include <thermo.h>
 
 int main(int argc, char **argv) {
   dash::init(&argc, &argv);
 
   Config config;
 
-  // initThermo();
+  std::cout << config;
+
+  auto termo = Thermo{config};
 
   // buildNeighbors();
 
