@@ -2,15 +2,25 @@
 
 #include <init.h>
 #include <thermo.h>
+#include <atom.h>
+#include <force.h>
 
 int main(int argc, char **argv) {
   dash::init(&argc, &argv);
 
   Config config;
+  ForceLJ force(config.input.cutneigh);
 
-  std::cout << config;
+  if (dash::myid() == 0) {
+    std::cout << config;
+  }
 
   auto termo = Thermo{config};
+  Atoms atoms(config);
+
+  if(dash::myid() == 0) {
+    atoms.create_atoms();
+  }
 
   // buildNeighbors();
 
