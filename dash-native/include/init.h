@@ -13,8 +13,17 @@ struct Float3D {
   {
   }
 
+  explicit Float3D(md_type x, md_type y, md_type z) : x(x), y(y), z(z) {}
+  Float3D() = default;
+
   md_type x;
   md_type y;
+
+  friend std::ostream& operator<<(std::ostream& os, const Float3D& v)
+  {
+    os << "Float3D([" << v.x << "," << v.y << "," << v.z << "])";
+    return os;
+  }
   md_type z;
 };
 
@@ -27,7 +36,7 @@ struct Int3D {
 struct Input {
   Input(std::array<size_t, 3> size)
     : problem_size(size)
-    , lattice(std::pow(4.0 / density, 1.0 / 3.0))
+    , lattice(std::pow(1.0 / density, 1.0 / 3.0))
   {
   }
 
@@ -42,6 +51,7 @@ struct Input {
   int                   neigh_every  = 20;
   int                   thermo_every = 100;
   float                 lattice;
+  float                 temp_scale;
 };
 
 struct Config {

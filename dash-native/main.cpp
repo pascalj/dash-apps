@@ -21,6 +21,8 @@ int main(int argc, char **argv) {
   if(dash::myid() == 0) {
     atoms.create_atoms();
   }
+  dash::barrier();
+  atoms.create_velocity();
 
   // buildNeighbors();
 

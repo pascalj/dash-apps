@@ -14,6 +14,7 @@ struct Thermo {
     , press_scale(1.0 / 3 / config.volume)
     , eng_scale(0.5)
   {
+    config.input.temp_scale = temp_scale;
   }
 
   Config &config;
