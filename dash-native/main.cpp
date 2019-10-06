@@ -3,7 +3,10 @@
 #include <init.h>
 #include <thermo.h>
 #include <atom.h>
+#include <neighbors.h>
 #include <force.h>
+#include <timer.h>
+#include <mpi.h>
 
 int main(int argc, char **argv) {
   dash::init(&argc, &argv);
@@ -15,8 +18,9 @@ int main(int argc, char **argv) {
     std::cout << config;
   }
 
-  auto termo = Thermo{config};
+  auto thermo = Thermo{config};
   Atoms atoms(config);
+  Neighbors neighbors(config);
 
   if(dash::myid() == 0) {
     atoms.create_atoms();
@@ -24,26 +28,53 @@ int main(int argc, char **argv) {
   dash::barrier();
   atoms.create_velocity();
 
-  // buildNeighbors();
+  neighbors.rebuild(atoms);
 
   /* printSim(); */
 
-  /* compute(true); */
+  force.compute(atoms, neighbors, true);
 
   // timer start
   
-  /* computeThermo(0, master); */
+  thermo.compute(force, 0);
+
+  /* int i = 0; */
+  /* for(auto atom : atoms.atoms) { */
+  /*   std::cout << "[" << i++ << "] " << (atom).get() <<std::endl; */
+  /* } */
+  /* return 1; */
 
 
   // master timer start
- 
-  /* run(master); */
 
-  // master timer end
+  // main loop
+  double start = MPI_Wtime();
+  for(uint32_t step = 0; step < config.num_steps; step++) {
+    
+    t(start, "Iteration start");
+    atoms.initial_integrate();
+    t(start, "initial integrate done");
 
-  /* compute(true); */
+    if (step % config.input.neigh_every == 0) {
+      neighbors.rebuild(atoms);
+    } else {
+      neighbors.update_positions(atoms);
+    }
 
-  /* computeThermo(-1, master); */
+    t(start, "neighbors done");
+    force.compute(atoms, neighbors, step % config.input.thermo_every == 0);
+
+    t(start, "force compute done");
+    atoms.final_integrate();
+
+    t(start, "final integrate done");
+    if(config.input.thermo_every > 0) {
+      thermo.compute(force, step);
+      t(start, "thermo compute done");
+
+    }
+
+  }
 
   dash::finalize();
 }

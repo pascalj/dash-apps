@@ -37,8 +37,5 @@ struct Thermo {
     auto temp  = temperature();
     auto eng   = force.eng_vdwl * eng_scale / config.num_atoms;
     auto press = (temp * dof_boltz + force.virial) * press_scale;
-
-    
   }
-
 };

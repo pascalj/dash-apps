@@ -4,28 +4,8 @@
 #include <valarray>
 
 using md_type = double;
+using index_t = dash::default_index_t;
 
-struct Float3D {
-  explicit Float3D(std::valarray<md_type> i)
-    : x(i[0])
-    , y(i[1])
-    , z(i[2])
-  {
-  }
-
-  explicit Float3D(md_type x, md_type y, md_type z) : x(x), y(y), z(z) {}
-  Float3D() = default;
-
-  md_type x;
-  md_type y;
-
-  friend std::ostream& operator<<(std::ostream& os, const Float3D& v)
-  {
-    os << "Float3D([" << v.x << "," << v.y << "," << v.z << "])";
-    return os;
-  }
-  md_type z;
-};
 
 struct Int3D {
   uint32_t x;
@@ -36,7 +16,7 @@ struct Int3D {
 struct Input {
   Input(std::array<size_t, 3> size)
     : problem_size(size)
-    , lattice(std::pow(1.0 / density, 1.0 / 3.0))
+    , lattice(std::pow(4.0 / density, 1.0 / 3.0))
   {
   }
 
@@ -52,6 +32,18 @@ struct Input {
   int                   thermo_every = 100;
   float                 lattice;
   float                 temp_scale;
+
+  friend std::ostream& operator<<(std::ostream& os, const Input& i)
+  {
+    os << "Input" << std::endl << std::endl;
+    os << "\tproblem_size\t" << i.problem_size[0] << "x" << i.problem_size[1]
+       << "x" << i.problem_size[2] << std::endl;
+    os << "\tdensity\t" << i.density << std::endl;
+    os << "\tdt\t" << i.dt << std::endl;
+    os << "\tdtforce\t" << i.dtforce << std::endl;
+    os << "\tcutneighsq\t" << i.cutneighsq << std::endl;
+    return os;
+  }
 };
 
 struct Config {
@@ -140,7 +132,7 @@ struct Config {
   std::valarray<md_type> box, boxlo, boxhi;
   md_type                volume    = 1.0;
 
-  uint32_t               num_atoms = 1;
+  uint32_t               num_atoms = 4;
   md_type                mass      = 1.0;
 
   constexpr static md_type small  = 1.0e-6;
@@ -168,6 +160,7 @@ struct Config {
     os << "\tvolume\t\t" << cfg.volume << std::endl;
     os << "\tnum_atoms\t" << cfg.num_atoms << std::endl;
     os << "\tmass\t\t" << cfg.mass << std::endl;
+    os << cfg.input;
     return os;
   }
 };

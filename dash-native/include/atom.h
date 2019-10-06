@@ -3,25 +3,34 @@
 #include <libdash.h>
 #include <algorithm>
 #include <valarray>
+#include <vector>
+#include <tuple>
 #include "init.h"
 
+using Float3D = std::array<double, 3>;
 using Velocity = Float3D;
 using v3int = std::valarray<int>;
 using v3 = std::valarray<double>;
+using pos_t = std::array<dash::default_index_t, 4>;
 
 struct Atom {
   Velocity v;
   Float3D  f{{0.0, 0.0, 0.0}};
+  Float3D  pos;
 
-  Atom(Velocity &v) : v(v) {}
-
-  explicit Atom(std::valarray<double> nv)
+  explicit Atom(Float3D nv)
     : v(nv)
   {
   }
-  explicit Atom(std::valarray<double> nv, std::valarray<double> nf)
+  explicit Atom(Float3D nv, Float3D nf)
     : v(nv)
     , f(nf)
+  {
+  }
+  explicit Atom(Float3D nv, Float3D nf, Float3D npos)
+    : v(nv)
+    , f(nf)
+    , pos(npos)
   {
   }
 
@@ -32,19 +41,24 @@ struct Atom {
     f = Float3D();
   }
 
+
+  /**
+   * Reset boundary conditions
+   */
   void pbc(double box_x, double box_y, double box_z) {
-    v.x += v.x < 0 ? box_x : 0;
-    v.y += v.y < 0 ? box_y : 0;
-    v.z += v.z < 0 ? box_z : 0;
-    v.x -= v.x >= box_x ? box_x : 0;
-    v.y -= v.y >= box_y ? box_y : 0;
-    v.z -= v.z >= box_z ? box_z : 0;
+    v[0] += v[0] < 0 ? box_x : 0;
+    v[1] += v[1] < 0 ? box_y : 0;
+    v[2] += v[2] < 0 ? box_z : 0;
+    v[0] -= v[0] >= box_x ? box_x : 0;
+    v[1] -= v[1] >= box_y ? box_y : 0;
+    v[2] -= v[2] >= box_z ? box_z : 0;
   }
 
   friend std::ostream& operator<<(std::ostream& os, const Atom& a)
   {
-    os << "Atom([" << a.v.x << "," << a.v.y << "," << a.v.z << "], ";
-    os << "[" << a.f.x << "," << a.f.y << "," << a.f.z << "])";
+    os << "Atom([" << a.v[0] << "," << a.v[1] << "," << a.v[2] << "], ";
+    os << "[" << a.f[0] << "," << a.f[1] << "," << a.f[2] << "], ";
+    os << "[" << a.pos[0] << "," << a.pos[1] << "," << a.pos[2] << "])";
     return os;
   }
 };
@@ -58,29 +72,108 @@ struct Atoms {
   Atoms(const Config& cfg)
     : config(cfg)
   {
-    pos.allocate(cfg.pos_spec());
     space.allocate(cfg.space_spec());
     // bins x*y*z*8
     atoms.allocate(cfg.bin_spec());
     per_bin.allocate(cfg.per_bin_spec());
     temperatures.allocate(dash::size());
+    t_eng_arr.allocate(dash::size());
+    t_vir_arr.allocate(dash::size());
   }
 
-  void create_atoms() {
+  template <typename IndexT>
+  auto get_atom(const std::array<IndexT, 3>& coords, const int offset_in_bin)
+  {
+    return atoms[coords[0]][coords[1]][coords[2]][offset_in_bin];
+  }
+
+  template <typename IndexT>
+  auto get_atom(const std::array<IndexT, 4>& coords)
+  {
+    return atoms[coords[0]][coords[1]][coords[2]][coords[3]];
+  }
+
+  template <typename IndexT>
+  auto get_pos(const std::array<IndexT, 3>& coords, const IndexT i)
+  {
+    return atoms[coords[0]][coords[1]][coords[2]][i].pos;
+  }
+
+  template <typename IndexT>
+  auto get_pos(const std::array<IndexT, 4>& coords)
+  {
+    return atoms(coords).get().pos;
+  }
+
+  /* template <typename IndexT> */
+  /* pos_t get_neighbor(const std::array<IndexT, 3>& coords, const int offset) */
+  /* { */
+  /*   return neighbors[coords[0]][coords[1]][coords[2]][offset]; */
+  /* } */
+
+  template <typename F>
+  void each_atom_with_offset(F&& f)
+  {
+    dash::for_each_with_index(
+        per_bin.begin(),
+        per_bin.end(),
+        [f, p = per_bin.pattern(), this](int natoms, size_t bin_index) {
+          auto const coords = p.coords(bin_index);
+
+          std::array<dash::default_index_t, 4> a_begin = {
+              coords[0], coords[1], coords[2], 0};
+          auto begin =
+              dash::local(atoms.begin() + atoms.pattern().global_at(a_begin));
+          for (int i = 0; i < natoms; i++) {
+            a_begin[3]++; 
+            f(*(begin + i), a_begin);
+          }
+        });
+  }
+
+  void initial_integrate()
+  {
+    each_atom_with_offset(
+        [this](
+            Atom&                                       a,
+            const std::array<dash::default_index_t, 4>& coords) {
+          for (int i = 0; i < 3; i++) {
+            a.v[i] += config.input.dtforce * a.f[i];
+            a.pos[i] += a.pos[i] * config.input.dt;
+          }
+        });
+  }
+
+  void final_integrate() {
+    dash::for_each(atoms.begin(), atoms.end(), [this] (Atom& a) {
+        for(int i = 0; i < 3; i++) {
+          a.v[i] += config.input.dtforce * a.f[i];
+        }
+    });
+  }
+
+
+  /**
+   * Create all needed atoms from a PRNG distributed across box, stored into
+   * bins.
+   */
+  void create_atoms()
+  {
     std::valarray<int> lo{0, 3}, hi{0, 3};
 
-    for(uint8_t i = 0; i < 3; i++) {
+    for (uint8_t i = 0; i < 3; i++) {
       lo[i] = std::max(0.0, config.boxlo[i] / (0.5 * config.input.lattice));
       hi[i] = std::min(
           2.0 * config.input.problem_size[i] - 1,
           config.boxhi[i] / (0.5 * config.input.lattice));
     }
 
-    std::valarray<int>   o(0, 3), s(0, 3), curCoord(0, 3);
-    std::valarray<double> temp(0.0, 3), v(0.0, 3);
-    size_t total = 0;
+    std::valarray<int>    o(0, 3), s(0, 3), curCoord(0, 3);
+    std::valarray<double> temp(0.0, 3);
+    Float3D v;
+    size_t                total = 0;
 
-    while(o[2] * config.per_bin <= hi[2]) {
+    while (o[2] * config.per_bin <= hi[2]) {
       curCoord = o * config.per_bin + s;
 
       bool within_bounds = (curCoord >= lo).min() && (curCoord <= hi).min();
@@ -90,33 +183,25 @@ struct Atoms {
           temp[i] = curCoord[i] * 0.5 * config.input.lattice;
         }
 
-        within_bounds = (temp >= config.boxlo).min() && (temp < config.boxhi).min();
+        within_bounds =
+            (temp >= config.boxlo).min() && (temp < config.boxhi).min();
 
         const Input& in = config.input;
         if (within_bounds) {
           int n = curCoord[2] * (2 * in.problem_size[1]) *
-                   (2 * in.problem_size[0]) + curCoord[1] *
-                   (2 * in.problem_size[0]) + curCoord[0] + 1;
-          for(uint8_t i = 0; i < 3; i++) {
-            for(uint8_t m = 0; m < 5; m++) {
+                      (2 * in.problem_size[0]) +
+                  curCoord[1] * (2 * in.problem_size[0]) + curCoord[0] + 1;
+          for (uint8_t i = 0; i < 3; i++) {
+            for (uint8_t m = 0; m < 5; m++) {
               pmrand(n);
             }
             v[i] = pmrand(n);
           }
           auto bin = coord2bin(temp);
-      printf(
-          "%d, %d, %d, -> %f, %f, %f -> %zu %zu %zu\n",
-          curCoord[0],
-          curCoord[1],
-          curCoord[2],
-          temp[0],
-          temp[1],
-          temp[2],
-          bin[0],
-          bin[1],
-          bin[2]
-          );
-          Atom a{v};
+          Atom a(v);
+          for (uint8_t i = 0; i < 3; i++) {
+            a.pos[i] = temp[i];
+          }
           add_atom(a, temp, coord2bin(temp));
           total++;
         }
@@ -124,47 +209,47 @@ struct Atoms {
 
       s[0]++;
 
-      if(s[0] == config.per_bin) {
+      if (s[0] == config.per_bin) {
         s[0] = 0;
         s[1]++;
       }
-      if(s[1] == config.per_bin) {
+      if (s[1] == config.per_bin) {
         s[1] = 0;
         s[2]++;
       }
-      if(s[2] == config.per_bin) {
+      if (s[2] == config.per_bin) {
         s[2] = 0;
         o[0]++;
       }
-      if(o[0] * config.per_bin > hi[0]) {
+      if (o[0] * config.per_bin > hi[0]) {
         o[0] = 0;
         o[1]++;
       }
-      if(o[1] * config.per_bin > hi[1]) {
+      if (o[1] * config.per_bin > hi[1]) {
         o[1] = 0;
         o[2]++;
       }
     }
-    std::cout << "total " << total << std::endl;
 
-    std::vector<int> bin_hist(config.per_bin + config.bin_buffer);
-    int i = 0;
-    for(int count : per_bin) {
-      bin_hist[count]++;
-      std::cout << " " << std::setw(2) << count;
-      if (i++ % 26 == 0) {
-        std::cout << std::endl;
-      }
-    }
-    std::cout << "hist: ";
-    for(auto bin : bin_hist) {
-      std::cout << " " << bin;
-    }
-    std::cout << std::endl;;
+    /* std::vector<int> bin_hist(config.per_bin + config.bin_buffer); */
+    /* int              i = 0; */
+    /* for (int count : per_bin) { */
+    /*   bin_hist[count]++; */
+    /*   std::cout << " " << std::setw(2) << count; */
+    /*   if (i++ % 26 == 0) { */
+    /*     std::cout << std::endl; */
+    /*   } */
+    /* } */
+    /* std::cout << "hist: "; */
+    /* for (auto bin : bin_hist) { */
+    /*   std::cout << " " << bin; */
+    /* } */
+    /* std::cout << std::endl; */
+    /* ; */
   }
 
-
-  void pbc() {
+  void pbc()
+  {
     dash::for_each(
         atoms.begin(),
         atoms.end(),
@@ -178,28 +263,23 @@ struct Atoms {
       const std::valarray<double>                v,
       const std::valarray<dash::default_index_t> bin)
   {
-    
-    /* std::cout << "adding atom: " << a << " -> " */
-    /*           << "(" << bin[0] << "," << bin[1] << "," << bin[2] << ")" */
-    /*           << std::endl; */
     int bin_atoms = per_bin[bin[0]][bin[1]][bin[2]]++;
-    if(bin_atoms >= config.per_bin + config.bin_buffer) {
+    if (bin_atoms >= config.per_bin + config.bin_buffer) {
       std::cout << "max atoms exhausted" << bin_atoms << std::endl;
     }
     atoms[bin[0]][bin[1]][bin[2]][bin_atoms] = a;
-
   }
 
   void create_velocity() {
-    auto lbegin =  atoms.lbegin();
-    const auto lend =  atoms.lend();
-    Velocity accu;
+    auto       lbegin = atoms.lbegin();
+    const auto lend   = atoms.lend();
+    Velocity   accu;
 
     for(;lbegin < lend; lbegin++) {
       const auto vel = lbegin->v;
-      accu.x += vel.x;
-      accu.y += vel.y;
-      accu.z += vel.z;
+      accu[0] += vel[0];
+      accu[1] += vel[1];
+      accu[2] += vel[2];
     }
 
     /* auto const total_velocity = dash::reduce( */
@@ -208,7 +288,7 @@ struct Atoms {
     /*     Velocity(), */
     /*     [](const Velocity& lv, const Atom& rhs) { */
     /*       const auto rv = rhs.v; */
-    /*       return Velocity{lv.x + rv.x, lv.y + rv.y, lv.z + rv.z}; */
+    /*       return Velocity{lv[0] + rv[0], lv[1] + rv[1], lv[2] + rv[2]}; */
     /*     }); */
 
     dash::Array<Velocity> local_sums{per_bin.team().size()};
@@ -222,52 +302,50 @@ struct Atoms {
         Velocity(),
         [](const Velocity& accu, auto globref) {
           const Velocity v = globref;
-          return Velocity{accu.x + v.x, accu.y + v.y, accu.z + v.z};
+          return Velocity{accu[0] + v[0], accu[1] + v[1], accu[2] + v[2]};
         });
-    std::cout << "total velocity: " << total_velocity << std::endl;
 
-    Velocity avg{total_velocity.x / config.num_atoms,
-                 total_velocity.y / config.num_atoms,
-                 total_velocity.z / config.num_atoms};
+    Velocity avg{total_velocity[0] / config.num_atoms,
+                 total_velocity[1] / config.num_atoms,
+                 total_velocity[2] / config.num_atoms};
 
-
-    dash::for_each(atoms.begin(), atoms.end(), [avg] (Atom &a) {
-        a.v.x = -avg.x;
-        a.v.y = -avg.y;
-        a.v.z = -avg.z;
-    });
+    dash::for_each_with_index(
+        atoms.begin(),
+        atoms.end(),
+        [avg, this](Atom& a, dash::default_index_t index) {
+          auto c = atoms.pattern().coords(index);
+          if (per_bin[c[0]][c[1]][c[2]] > c[3]) {
+            a.v[0] -= -avg[0];
+            a.v[1] -= -avg[1];
+            a.v[2] -= -avg[2];
+          }
+        });
 
     dash::barrier();
     const auto factor = std::sqrt(config.input.initial_temp / temperature());
 
-    std::cout << "temp factor" << factor << std::endl;
-
-    dash::for_each(atoms.begin(), atoms.end(), [avg, factor](Atom& a) {
-      a.v.x *= factor;
-      a.v.y *= factor;
-      a.v.z *= factor;
-    });
-
-    /* dash::for_each_with_index( */
-    /*     per_bin.begin(), per_bin.end(), [=](int bin_count, size_t bin_index) { */
-    /*       auto const coords = per_bin.pattern().coords(bin_index); */
-    /*       for (uint8_t i = 0; i < bin_count; i++) { */
-    /*         atoms[coords[0]][coords[1]][coords[2]][i]; */
-    /*       } */
-    /*     }); */
-
+    dash::for_each_with_index(
+        atoms.begin(),
+        atoms.end(),
+        [avg, this, factor](Atom& a, index_t index) {
+          auto c = atoms.pattern().coords(index);
+          if (per_bin[c[0]][c[1]][c[2]] > c[3]) {
+            a.v[0] *= factor;
+            a.v[1] *= factor;
+            a.v[2] *= factor;
+          }
+        });
   }
 
   double temperature()
   {
-    double temp = 0;
     double local_temp = std::accumulate(
         atoms.lbegin(),
         atoms.lend(),
         0.0,
         [mass = config.mass](double accu, const Atom& a) {
           const auto v = a.v;
-          return (v.x * v.x + v.y * v.y + v.z * v.z) * mass;
+          return accu + (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) * mass;
         });
     temperatures[dash::myid()] = local_temp;
     double global_temp =
@@ -285,14 +363,14 @@ struct Atoms {
           auto const coords = per_bin.pattern().coords(bin_index);
           // for each atom in the bin
           for (uint8_t i = 0; i < bin_count; i++) {
-            auto           a     = atoms[coords[0]][coords[1]][coords[2]][i];
-            const Float3D& a_pos = pos[coords[0]][coords[1]][coords[2]][i];
-            const auto     dest_bin = coord2bin({a_pos.x, a_pos.y, a_pos.z});
+            Atom           a     = atoms[coords[0]][coords[1]][coords[2]][i];
+            const Float3D& a_pos = a.pos;
+            const auto     dest_bin = coord2bin({a_pos[0], a_pos[1], a_pos[2]});
             auto const     val_coords =
                 std::valarray<dash::default_index_t>(coords.data(), 3);
             if ((dest_bin != val_coords).min()) {
               // move the atom iff its bin changed
-              add_atom(a, {a_pos.x, a_pos.y, a_pos.z}, dest_bin);
+              add_atom(a, {a_pos[0], a_pos[1], a_pos[2]}, dest_bin);
 
               if (i != bin_count - 1) {
                 atoms[coords[0]][coords[1]][coords[2]][i] = a;
@@ -332,15 +410,25 @@ struct Atoms {
     return temp;
   }
 
-  const Config& config;
-  dash::NArray<Float3D, 4> pos;
+  const Config&            config;
   dash::NArray<Float3D, 4> space;
-  // actual atoms (x*y*z*per_bin[x][y][z])
-  dash::NArray<Atom, 4> atoms;
-  // Real positions of atoms
-  // number of atoms per bin
-  dash::NArray<int, 3> per_bin;
-  dash::Array<double>  temperatures;
+  dash::NArray<Atom, 4>    atoms;    // actual atoms (x*y*z*per_bin[x][y][z])
+  dash::NArray<int, 3>     per_bin;  // number of atoms per bin
+  dash::Array<double>      temperatures;  // temperature on each unit
+  dash::Array<double>      t_eng_arr;     // temperature on each unit
+  dash::Array<double>      t_vir_arr;     // temperature on each unit
 };
 
+template <typename Arr>
+auto distance(const Arr a, const Arr b)
+{
+  using value_t = typename Arr::value_type;
+  value_t sum{0};
+  for (auto i = 0; i < std::tuple_size<Arr>::value; i++) {
+    const auto ai = a[i];
+    const auto bi = b[i];
+    sum += (ai - bi) * (ai - bi);
+  }
+  return sum;
+}
 
