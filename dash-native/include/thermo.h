@@ -3,6 +3,19 @@
 #include "init.h"
 #include "force.h"
 
+struct Stats {
+  Stats(md_type temp, md_type eng, md_type press)
+    : temp(temp)
+    , eng(eng)
+    , press(press)
+  {
+  }
+
+  md_type temp;
+  md_type eng;
+  md_type press;
+};
+
 struct Thermo {
   Thermo() = delete;
 
@@ -18,13 +31,13 @@ struct Thermo {
   }
 
   Config &config;
-  float mvv2e = 1.0;
-  float dof_boltz;
-  float temp_scale;
-  float press_scale;
-  float eng_scale;
+  md_type mvv2e = 1.0;
+  md_type dof_boltz;
+  md_type temp_scale;
+  md_type press_scale;
+  md_type eng_scale;
 
-  float temperature() const {
+  double temperature() const {
     // TODO: implement
     return 0;
   }
@@ -37,5 +50,9 @@ struct Thermo {
     auto temp  = temperature();
     auto eng   = force.eng_vdwl * eng_scale / config.num_atoms;
     auto press = (temp * dof_boltz + force.virial) * press_scale;
+
+    stats.emplace_back(temp, eng, press);
   }
+
+  std::vector<Stats> stats;
 };

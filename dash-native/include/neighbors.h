@@ -29,8 +29,6 @@ struct Neighbors {
     // reserve local neighbor lists
     neighs.clear();
     neighs.resize(atoms.atoms.local_size());
-    const auto  nsize   = neighs.size();
-    const auto  myid    = atoms.per_bin.team().myid();
     const auto& bin_pat = atoms.per_bin.pattern();
 
     const auto local_blocks = bin_pat.local_blockspec().size();
@@ -39,7 +37,7 @@ struct Neighbors {
         dash::local_index_range(atoms.atoms.begin(), atoms.atoms.end());
     const auto lbase = (atoms.atoms.begin() + lindex_range.begin).local();
 
-    for (int b = 0; b < local_blocks; b++) {
+    for (size_t b = 0; b < local_blocks; b++) {
       const auto offsets = bin_pat.local_block(b).offsets();
       const auto extents = bin_pat.local_block(b).extents();
       const auto xstart  = offsets[0];
@@ -52,8 +50,8 @@ struct Neighbors {
       for (uint32_t x = xstart; x < xend; x++) {
         for (uint32_t y = ystart; y < yend; y++) {
           for (uint32_t z = zstart; z < zend; z++) {
-            const int  bin_size = atoms.per_bin[x][y][z];
-            const auto l_bin_offset =
+            const uint32_t bin_size = atoms.per_bin[x][y][z];
+            const auto     l_bin_offset =
                 atoms.atoms.pattern().local_at({x, y, z, 0});
             const auto l_bin = lbase + l_bin_offset;
 
@@ -62,9 +60,9 @@ struct Neighbors {
                 x,
                 y,
                 z,
-                [&, this](Atom* n_bin, auto glob_ptr, size_t nbin_size) {
+                [&, this](Atom* n_bin, auto glob_ptr, uint32_t nbin_size) {
                   // for each atom in the bin
-                  for (uint32_t j{0}; j < bin_size; j++) {
+                  for (uint32_t j = 0; j < bin_size; j++) {
                     // for each neighbor in the neighbor bin
                     for (uint32_t i{0}; i < nbin_size; i++) {
                       if (i == j && n_bin == l_bin) {
@@ -126,9 +124,10 @@ struct Neighbors {
             const auto insert_pos = mirrored_atoms.size();
             mirrored_atoms.resize(insert_pos + nbin_size);
             bin_ptr = mirrored_atoms.data() + insert_pos;
-            ptr = gptr_t{a.atoms.begin() + gindex};
+            auto iter = a.atoms.begin() + gindex;
+            ptr = gptr_t(iter);
             std::cout << "ptr: " << a.atoms.begin() << std::endl;
-            dash::copy(ptr, ptr + nbin_size, bin_ptr);
+            dash::copy(iter, iter + nbin_size, bin_ptr);
             std::cout << "last: " << mirrored_atoms.back() << std::endl;
             std::cout << "size: " << mirrored_atoms.size() << std::endl;
           }

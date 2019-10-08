@@ -32,7 +32,6 @@ struct ForceLJ : public Force {
     virial = 0;
 
     auto& per_bin = atoms.per_bin;
-    auto& bins = atoms.atoms;
 
     dash::for_each(atoms.atoms.begin(), atoms.atoms.end(), [](Atom& a) {
       a.f = Float3D();

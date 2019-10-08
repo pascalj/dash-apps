@@ -359,7 +359,7 @@ struct Atoms {
     dash::for_each_with_index(
         per_bin.begin(),
         per_bin.end(),
-        [=](int& bin_count, size_t bin_index) {
+        [=](uint32_t& bin_count, size_t bin_index) {
           auto const coords = per_bin.pattern().coords(bin_index);
           // for each atom in the bin
           for (uint8_t i = 0; i < bin_count; i++) {
@@ -410,13 +410,13 @@ struct Atoms {
     return temp;
   }
 
-  const Config&            config;
-  dash::NArray<Float3D, 4> space;
-  dash::NArray<Atom, 4>    atoms;    // actual atoms (x*y*z*per_bin[x][y][z])
-  dash::NArray<int, 3>     per_bin;  // number of atoms per bin
-  dash::Array<double>      temperatures;  // temperature on each unit
-  dash::Array<double>      t_eng_arr;     // temperature on each unit
-  dash::Array<double>      t_vir_arr;     // temperature on each unit
+  const Config&             config;
+  dash::NArray<Float3D, 4>  space;
+  dash::NArray<Atom, 4>     atoms;    // actual atoms (x*y*z*per_bin[x][y][z])
+  dash::NArray<uint32_t, 3> per_bin;  // number of atoms per bin
+  dash::Array<double>       temperatures;  // temperature on each unit
+  dash::Array<double>       t_eng_arr;     // temperature on each unit
+  dash::Array<double>       t_vir_arr;     // temperature on each unit
 };
 
 template <typename Arr>
@@ -424,7 +424,7 @@ auto distance(const Arr a, const Arr b)
 {
   using value_t = typename Arr::value_type;
   value_t sum{0};
-  for (auto i = 0; i < std::tuple_size<Arr>::value; i++) {
+  for (size_t i = 0; i < std::tuple_size<Arr>::value; i++) {
     const auto ai = a[i];
     const auto bi = b[i];
     sum += (ai - bi) * (ai - bi);
