@@ -52,8 +52,8 @@ struct ForceLJ : public Force {
 
           auto a_begin =
               atoms.atoms[coords[0]][coords[1]][coords[2]].begin().local();
-          const auto atom_index = atoms.atoms.pattern().local_at(
-              {coords[0], coords[1], coords[2], 0});
+          const auto atom_index = atoms.atoms.pattern().local_index(
+              {coords[0], coords[1], coords[2], 0}).index;
 
           for (dash::default_index_t i = 0; i < natoms; i++) {
             auto atom = a_begin + i;

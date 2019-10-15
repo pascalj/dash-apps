@@ -11,7 +11,7 @@
 int main(int argc, char **argv) {
   dash::init(&argc, &argv);
 
-  Config config;
+  Config  config;
   ForceLJ force(config.input.cutneigh);
 
   if (dash::myid() == 0) {
@@ -51,9 +51,9 @@ int main(int argc, char **argv) {
   double start = MPI_Wtime();
   for(uint32_t step = 0; step < config.num_steps; step++) {
     
-    t(start, "Iteration start");
+    /* t(start, "Iteration start"); */
     atoms.initial_integrate();
-    t(start, "initial integrate done");
+    /* t(start, "initial integrate done"); */
 
     if (step % config.input.neigh_every == 0) {
       neighbors.rebuild(atoms);
@@ -61,20 +61,22 @@ int main(int argc, char **argv) {
       neighbors.update_positions(atoms);
     }
 
-    t(start, "neighbors done");
+    /* t(start, "neighbors done"); */
     force.compute(atoms, neighbors, step % config.input.thermo_every == 0);
 
-    t(start, "force compute done");
+    /* t(start, "force compute done"); */
     atoms.final_integrate();
 
-    t(start, "final integrate done");
+    /* t(start, "final integrate done"); */
     if(config.input.thermo_every > 0) {
       thermo.compute(force, step);
-      t(start, "thermo compute done");
+      /* t(start, "thermo compute done"); */
 
     }
 
   }
+  std::cout << "t" << atoms.temperature();
+  t(start, "end");
 
   dash::finalize();
 }

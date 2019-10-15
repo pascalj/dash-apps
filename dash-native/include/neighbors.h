@@ -3,15 +3,23 @@
 #include <atom.h>
 #include <init.h>
 #include <algorithm>
+#include <map>
 
 struct Neighbor {
+  using ref_t = dash::GlobAsyncRef<Atom>;
   // reference to an atom, either local or in a mirrored bin
   Atom*               a;
-  dash::GlobPtr<Atom, dash::GlobStaticMem<dash::HostSpace>> glob_ptr;
+  ref_t glob_ptr;
+
+  Neighbor(Atom* a, ref_t&& ref)
+    : a(a)
+    , glob_ptr(std::move(ref))
+  {
+  }
 
   void update() {
-    if (glob_ptr != nullptr) {
-      *a = *glob_ptr;
+    if (glob_ptr.dart_gptr() != DART_GPTR_NULL) {
+      glob_ptr.get(a);
     }
   }
 };
@@ -75,8 +83,8 @@ struct Neighbors {
                       if (rsq <= config.input.cutneighsq) {
                         auto update_ptr =
                             glob_ptr == nullptr ? glob_ptr : glob_ptr + i;
-                        Neighbor n{n_bin + i, update_ptr};
-                        neighs[l_bin_offset + j].push_back(n);
+                        dash::GlobAsyncRef<Atom> ref(update_ptr.dart_gptr());
+                        neighs[l_bin_offset + j].emplace_back(n_bin + i, std::move(ref));
                       }
                     }
                   }
@@ -94,6 +102,9 @@ struct Neighbors {
         neigh.update();
       }
     }
+    // Flush all updates
+    auto gptr = atoms.per_bin.begin().dart_gptr();
+    dart_flush_all(gptr);
   }
 
   template <typename F>
@@ -111,25 +122,29 @@ struct Neighbors {
     for (auto nx = minx; nx < maxx; nx++) {
       for (auto ny = miny; ny < maxy; ny++) {
         for (auto nz = minz; nz < maxz; nz++) {
-          const auto gindex    = pat.global_at({nx, ny, nz, 0});
-          const int  nbin_size = a.per_bin[nx][ny][nz];
+          const auto gindex     = pat.global_at({nx, ny, nz, 0});
+          const auto nbin_index = a.per_bin.pattern().global_at({nx, ny, nz});
+          const int  nbin_size  = a.per_bin[nx][ny][nz];
 
           Atom*  bin_ptr;
           gptr_t ptr;
           if (pat.is_local(gindex)) {
+            assert(a.per_bin.pattern().is_local(nbin_index));
             bin_ptr = (a.atoms.begin() + gindex).local();
           }
           else {
-            // grow mirrored atoms list
-            const auto insert_pos = mirrored_atoms.size();
-            mirrored_atoms.resize(insert_pos + nbin_size);
-            bin_ptr = mirrored_atoms.data() + insert_pos;
+            assert(!a.per_bin.pattern().is_local(nbin_index));
             auto iter = a.atoms.begin() + gindex;
-            ptr = gptr_t(iter);
-            std::cout << "ptr: " << a.atoms.begin() << std::endl;
-            dash::copy(iter, iter + nbin_size, bin_ptr);
-            std::cout << "last: " << mirrored_atoms.back() << std::endl;
-            std::cout << "size: " << mirrored_atoms.size() << std::endl;
+            assert(!iter.is_local());
+            ptr       = static_cast<gptr_t>(iter);
+            // grow mirrored atoms list
+            if (!mirrored_bins.count(nbin_index)) {
+              auto mirrored_bin =
+                  mirrored_bins.emplace(nbin_index, nbin_size);
+              dash::copy(
+                  iter, iter + nbin_size, mirrored_bin.first->second.data());
+            }
+            bin_ptr = mirrored_bins[nbin_index].data();
           }
           f(bin_ptr, ptr, nbin_size);
         }
@@ -137,13 +152,9 @@ struct Neighbors {
     }
   }
 
-  /* template<typename CoordsT> */
-  /* auto& neighbors_for(CoordsT coords) { */
-  /*   return neighs[gindex]; */
-  /* } */
-
-  std::vector<std::vector<Neighbor>> neighs;
-  std::vector<Atom>                  mirrored_atoms;
-  const Config&                      config;
+  std::vector<std::vector<Neighbor>>   neighs;
+  // simple store for mirrored bins
+  std::map<index_t, std::vector<Atom>> mirrored_bins;
+  const Config&                        config;
 };
 
