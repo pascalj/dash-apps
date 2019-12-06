@@ -111,9 +111,9 @@ struct Neighbors {
   void neighbor_bins(Atoms& a, uint32_t x, uint32_t y, uint32_t z, F&& f)
   {
     using gptr_t = dash::GlobPtr<Atom, dash::GlobStaticMem<dash::HostSpace>>;
-    const auto minx = std::max(uint32_t{0}, x - config.bin_needed[0]);
-    const auto miny = std::max(uint32_t{0}, y - config.bin_needed[1]);
-    const auto minz = std::max(uint32_t{0}, z - config.bin_needed[2]);
+    const auto minx = std::max(0, static_cast<int32_t>(x - config.bin_needed[0]));
+    const auto miny = std::max(0, static_cast<int32_t>(y - config.bin_needed[1]));
+    const auto minz = std::max(0, static_cast<int32_t>(z - config.bin_needed[2]));
     const auto maxx = std::min(config.num_bins[0], x + config.bin_needed[0]);
     const auto maxy = std::min(config.num_bins[1], y + config.bin_needed[1]);
     const auto maxz = std::min(config.num_bins[2], z + config.bin_needed[2]);
