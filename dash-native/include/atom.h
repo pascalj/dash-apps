@@ -138,8 +138,8 @@ struct Atoms {
             Atom&                                       a,
             const std::array<dash::default_index_t, 4>& coords) {
           for (int i = 0; i < 3; i++) {
-            a.v[i] += config.input.dtforce * a.f[i];
-            a.pos[i] += a.pos[i] * config.input.dt;
+            a.v[i] += a.f[i] * config.input.dtforce;
+            a.pos[i] += a.v[i] * config.input.dt;
           }
         });
   }

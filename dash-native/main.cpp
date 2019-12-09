@@ -30,20 +30,11 @@ int main(int argc, char **argv) {
 
   neighbors.rebuild(atoms);
 
-  /* printSim(); */
-
   force.compute(atoms, neighbors, true);
 
   // timer start
   
   thermo.compute(force, 0);
-
-  /* int i = 0; */
-  /* for(auto atom : atoms.atoms) { */
-  /*   std::cout << "[" << i++ << "] " << (atom).get() <<std::endl; */
-  /* } */
-  /* return 1; */
-
 
   // master timer start
 
@@ -74,8 +65,9 @@ int main(int argc, char **argv) {
 
     }
 
+      std::cout << "t " << atoms.temperature() << std::endl;
+
   }
-  std::cout << "t" << atoms.temperature();
   t(start, "end");
 
   dash::finalize();

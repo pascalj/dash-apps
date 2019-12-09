@@ -64,7 +64,7 @@ struct ForceLJ : public Force {
 
               auto rsq = dot(del, del);
               if (rsq < cutforcesq) {
-                const auto sr2   = 1 / rsq;
+                const auto sr2   = 1.0 / rsq;
                 const auto sr6   = std::pow(sr2, 3);
                 const auto force = 48.0 * sr6 * (sr6 - 0.5) * sr2;
                 for (int b = 0; b < 3; b++) {
