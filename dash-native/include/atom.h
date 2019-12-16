@@ -125,7 +125,7 @@ struct Atoms {
           auto begin =
               dash::local(atoms.begin() + atoms.pattern().global_at(a_begin));
           for (int i = 0; i < natoms; i++) {
-            a_begin[3]++; 
+            a_begin[3]++;
             f(*(begin + i), a_begin);
           }
         });
@@ -230,22 +230,6 @@ struct Atoms {
         o[2]++;
       }
     }
-
-    /* std::vector<int> bin_hist(config.per_bin + config.bin_buffer); */
-    /* int              i = 0; */
-    /* for (int count : per_bin) { */
-    /*   bin_hist[count]++; */
-    /*   std::cout << " " << std::setw(2) << count; */
-    /*   if (i++ % 26 == 0) { */
-    /*     std::cout << std::endl; */
-    /*   } */
-    /* } */
-    /* std::cout << "hist: "; */
-    /* for (auto bin : bin_hist) { */
-    /*   std::cout << " " << bin; */
-    /* } */
-    /* std::cout << std::endl; */
-    /* ; */
   }
 
   void pbc()
@@ -281,15 +265,6 @@ struct Atoms {
       accu[1] += vel[1];
       accu[2] += vel[2];
     }
-
-    /* auto const total_velocity = dash::reduce( */
-    /*     atoms.begin(), */
-    /*     atoms.end(), */
-    /*     Velocity(), */
-    /*     [](const Velocity& lv, const Atom& rhs) { */
-    /*       const auto rv = rhs.v; */
-    /*       return Velocity{lv[0] + rv[0], lv[1] + rv[1], lv[2] + rv[2]}; */
-    /*     }); */
 
     dash::Array<Velocity> local_sums{per_bin.team().size()};
     local_sums[dash::myid()] = accu;
@@ -327,7 +302,7 @@ struct Atoms {
     dash::for_each_with_index(
         atoms.begin(),
         atoms.end(),
-        [avg, this, factor](Atom& a, index_t index) {
+        [this, factor](Atom& a, index_t index) {
           auto c = atoms.pattern().coords(index);
           if (per_bin[c[0]][c[1]][c[2]] > c[3]) {
             a.v[0] *= factor;

@@ -51,9 +51,9 @@ struct Neighbors {
       const auto xstart  = offsets[0];
       const auto ystart  = offsets[1];
       const auto zstart  = offsets[2];
-      const auto xend    = extents[0];
-      const auto yend    = extents[1];
-      const auto zend    = extents[2];
+      const auto xend    = xstart + extents[0];
+      const auto yend    = ystart + extents[1];
+      const auto zend    = zstart + extents[2];
 
       for (uint32_t x = xstart; x < xend; x++) {
         for (uint32_t y = ystart; y < yend; y++) {
@@ -72,7 +72,7 @@ struct Neighbors {
                   // for each atom in the bin
                   for (uint32_t j = 0; j < bin_size; j++) {
                     // for each neighbor in the neighbor bin
-                    for (uint32_t i{0}; i < nbin_size; i++) {
+                    for (uint32_t i = 0; i < nbin_size; i++) {
                       if (i == j && n_bin == l_bin) {
                         continue;
                       }
@@ -80,7 +80,7 @@ struct Neighbors {
                       auto n_pos = n_bin[i].pos;
 
                       auto rsq = distance(a_pos, n_pos);
-                      if (rsq <= config.input.cutneighsq) {
+                      if (true || rsq <= config.input.cutneighsq) {
                         auto update_ptr =
                             glob_ptr == nullptr ? glob_ptr : glob_ptr + i;
                         dash::GlobAsyncRef<Atom> ref(update_ptr.dart_gptr());
@@ -102,6 +102,11 @@ struct Neighbors {
         neigh.update();
       }
     }
+
+    std::cout << "Number of neighbors: " << std::accumulate(
+        neighs.begin(), neighs.end(), 0, [](auto accu, auto& neigh) {
+          return neigh.size() + accu;
+        }) << std::endl;
     // Flush all updates
     auto gptr = atoms.per_bin.begin().dart_gptr();
     dart_flush_all(gptr);
@@ -111,12 +116,12 @@ struct Neighbors {
   void neighbor_bins(Atoms& a, uint32_t x, uint32_t y, uint32_t z, F&& f)
   {
     using gptr_t = dash::GlobPtr<Atom, dash::GlobStaticMem<dash::HostSpace>>;
-    const auto minx = std::max(0, static_cast<int32_t>(x - config.bin_needed[0]));
-    const auto miny = std::max(0, static_cast<int32_t>(y - config.bin_needed[1]));
-    const auto minz = std::max(0, static_cast<int32_t>(z - config.bin_needed[2]));
-    const auto maxx = std::min(config.num_bins[0], x + config.bin_needed[0]);
-    const auto maxy = std::min(config.num_bins[1], y + config.bin_needed[1]);
-    const auto maxz = std::min(config.num_bins[2], z + config.bin_needed[2]);
+    const uint32_t minx = std::max(0, static_cast<int32_t>(x - config.bin_needed[0]));
+    const uint32_t miny = std::max(0, static_cast<int32_t>(y - config.bin_needed[1]));
+    const uint32_t minz = std::max(0, static_cast<int32_t>(z - config.bin_needed[2]));
+    const uint32_t maxx = std::min(config.num_bins[0], x + config.bin_needed[0]);
+    const uint32_t maxy = std::min(config.num_bins[1], y + config.bin_needed[1]);
+    const uint32_t maxz = std::min(config.num_bins[2], z + config.bin_needed[2]);
 
     const auto& pat = a.atoms.pattern();
     for (auto nx = minx; nx < maxx; nx++) {
@@ -152,7 +157,7 @@ struct Neighbors {
     }
   }
 
-  std::vector<std::vector<Neighbor>>   neighs;
+  std::vector<std::vector<Neighbor>> neighs;
   // simple store for mirrored bins
   std::map<index_t, std::vector<Atom>> mirrored_bins;
   const Config&                        config;

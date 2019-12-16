@@ -33,7 +33,6 @@ int main(int argc, char **argv) {
   force.compute(atoms, neighbors, true);
 
   // timer start
-  
   thermo.compute(force, 0);
 
   // master timer start
@@ -41,7 +40,7 @@ int main(int argc, char **argv) {
   // main loop
   double start = MPI_Wtime();
   for(uint32_t step = 0; step < config.num_steps; step++) {
-    
+
     /* t(start, "Iteration start"); */
     atoms.initial_integrate();
     /* t(start, "initial integrate done"); */
@@ -51,6 +50,20 @@ int main(int argc, char **argv) {
     } else {
       neighbors.update_positions(atoms);
     }
+    if (step == 0) {
+      for (size_t i = 0; i < config.num_bins[0]; i++) {
+        for (size_t j = 0; j < config.num_bins[1]; j++) {
+          std::cout << std::setw(2) << atoms.per_bin[i][j][0].get() << " ";
+        }
+
+        std::cout << "  |  ";
+        for (size_t j = 0; j < config.num_bins[1]; j++) {
+          std::cout << std::setw(2) << neighbors.neighs[i * config.num_bins[0] + j].size() << " ";
+        }
+        std::cout << std::endl;
+      }
+    }
+
 
     /* t(start, "neighbors done"); */
     force.compute(atoms, neighbors, step % config.input.thermo_every == 0);
@@ -61,12 +74,10 @@ int main(int argc, char **argv) {
     /* t(start, "final integrate done"); */
     if(config.input.thermo_every > 0) {
       thermo.compute(force, step);
-      /* t(start, "thermo compute done"); */
-
+      t(start, "thermo compute done");
     }
 
-      std::cout << "t " << atoms.temperature() << std::endl;
-
+    std::cout << "t " << atoms.temperature() << std::endl;
   }
   t(start, "end");
 
