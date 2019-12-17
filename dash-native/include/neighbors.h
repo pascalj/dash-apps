@@ -80,7 +80,7 @@ struct Neighbors {
                       auto n_pos = n_bin[i].pos;
 
                       auto rsq = distance(a_pos, n_pos);
-                      if (true || rsq <= config.input.cutneighsq) {
+                      if (rsq <= config.input.cutneighsq) {
                         auto update_ptr =
                             glob_ptr == nullptr ? glob_ptr : glob_ptr + i;
                         dash::GlobAsyncRef<Atom> ref(update_ptr.dart_gptr());

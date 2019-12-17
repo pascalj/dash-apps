@@ -16,7 +16,7 @@ using pos_t = std::array<dash::default_index_t, 4>;
 struct Atom {
   Velocity v;
   Float3D  f{{0.0, 0.0, 0.0}};
-  Float3D  pos;
+  Float3D  pos{{0.0, 0.0, 0.0}};
 
   explicit Atom(Float3D nv)
     : v(nv)
@@ -152,7 +152,6 @@ struct Atoms {
     });
   }
 
-
   /**
    * Create all needed atoms from a PRNG distributed across box, stored into
    * bins.
@@ -162,7 +161,7 @@ struct Atoms {
     std::valarray<int> lo{0, 3}, hi{0, 3};
 
     for (uint8_t i = 0; i < 3; i++) {
-      lo[i] = std::max(0.0, config.boxlo[i] / (0.5 * config.input.lattice));
+      lo[i] = std::max(0.0, config.boxlo[i] / (0.5 * config.input.lattice) - 1);
       hi[i] = std::min(
           2.0 * config.input.problem_size[i] - 1,
           config.boxhi[i] / (0.5 * config.input.lattice));
@@ -170,7 +169,7 @@ struct Atoms {
 
     std::valarray<int>    o(0, 3), s(0, 3), curCoord(0, 3);
     std::valarray<double> temp(0.0, 3);
-    Float3D v;
+    Float3D               v;
     size_t                total = 0;
 
     while (o[2] * config.per_bin <= hi[2]) {
@@ -178,7 +177,7 @@ struct Atoms {
 
       bool within_bounds = (curCoord >= lo).min() && (curCoord <= hi).min();
 
-      if ((curCoord.sum() % config.per_bin == 2) && within_bounds) {
+      if ((curCoord.sum() % 2 == 0) && within_bounds) {
         for (uint8_t i = 0; i < 3; i++) {
           temp[i] = curCoord[i] * 0.5 * config.input.lattice;
         }
@@ -202,7 +201,7 @@ struct Atoms {
           for (uint8_t i = 0; i < 3; i++) {
             a.pos[i] = temp[i];
           }
-          add_atom(a, temp, coord2bin(temp));
+          add_atom(a, coord2bin(temp));
           total++;
         }
       }
@@ -244,12 +243,12 @@ struct Atoms {
 
   void add_atom(
       const Atom&                                a,
-      const std::valarray<double>                v,
       const std::valarray<dash::default_index_t> bin)
   {
     int bin_atoms = per_bin[bin[0]][bin[1]][bin[2]]++;
     if (bin_atoms >= config.per_bin + config.bin_buffer) {
       std::cout << "max atoms exhausted" << bin_atoms << std::endl;
+      exit(1);
     }
     atoms[bin[0]][bin[1]][bin[2]][bin_atoms] = a;
   }
@@ -341,15 +340,16 @@ struct Atoms {
             Atom           a     = atoms[coords[0]][coords[1]][coords[2]][i];
             const Float3D& a_pos = a.pos;
             const auto     dest_bin = coord2bin({a_pos[0], a_pos[1], a_pos[2]});
-            auto const     val_coords =
+            const auto     val_coords =
                 std::valarray<dash::default_index_t>(coords.data(), 3);
             if ((dest_bin != val_coords).min()) {
               // move the atom iff its bin changed
-              add_atom(a, {a_pos[0], a_pos[1], a_pos[2]}, dest_bin);
+              add_atom(a, dest_bin);
 
               if (i != bin_count - 1) {
                 atoms[coords[0]][coords[1]][coords[2]][i] = a;
               }
+
               a = Atom();
               // TODO: atomic
               bin_count--;

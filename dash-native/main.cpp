@@ -8,6 +8,8 @@
 #include <timer.h>
 #include <mpi.h>
 
+#include <algorithm>
+
 int main(int argc, char **argv) {
   dash::init(&argc, &argv);
 
@@ -32,6 +34,31 @@ int main(int argc, char **argv) {
 
   force.compute(atoms, neighbors, true);
 
+  const size_t layer = 1;
+      for (size_t i = 0; i < 6; i++) {
+        for (size_t j = 0; j < 6; j++) {
+          /* std::cout << std::setw(2) << atoms.per_bin[i][j][layer].get() << " "; */
+          Float3D pos{0.0, 0.0, 0.0};
+          for(size_t k = 0; k < atoms.per_bin[i][j][layer]; k++) {
+            pos[0] += atoms.atoms[i][j][layer][k].get().pos[0];
+            pos[1] += atoms.atoms[i][j][layer][k].get().pos[1];
+            pos[2] += atoms.atoms[i][j][layer][k].get().pos[2];
+            /* std::cout << atoms.atoms[i][j][0][k].get() << std::endl; */
+          }
+          auto per_bin = atoms.per_bin[i][j][layer].get();
+          if(per_bin > 0) {
+            printf("(%05.2f, %05.2f, %05.2f) ", pos[0] / per_bin, pos[1] / per_bin, pos[2] / per_bin);
+          } else {
+            printf("(...................) ");
+          }
+        }
+
+        std::cout << "  |  ";
+        for (size_t j = 0; j < config.num_bins[1]; j++) {
+          std::cout << std::setw(2) << neighbors.neighs[i * config.num_bins[0] + j].size() << " ";
+        }
+        std::cout << std::endl;
+      }
   // timer start
   thermo.compute(force, 0);
 
@@ -50,20 +77,6 @@ int main(int argc, char **argv) {
     } else {
       neighbors.update_positions(atoms);
     }
-    if (step == 0) {
-      for (size_t i = 0; i < config.num_bins[0]; i++) {
-        for (size_t j = 0; j < config.num_bins[1]; j++) {
-          std::cout << std::setw(2) << atoms.per_bin[i][j][0].get() << " ";
-        }
-
-        std::cout << "  |  ";
-        for (size_t j = 0; j < config.num_bins[1]; j++) {
-          std::cout << std::setw(2) << neighbors.neighs[i * config.num_bins[0] + j].size() << " ";
-        }
-        std::cout << std::endl;
-      }
-    }
-
 
     /* t(start, "neighbors done"); */
     force.compute(atoms, neighbors, step % config.input.thermo_every == 0);
@@ -83,3 +96,4 @@ int main(int argc, char **argv) {
 
   dash::finalize();
 }
+
